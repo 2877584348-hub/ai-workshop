@@ -4,8 +4,9 @@ import { MOCK_TOOLS, MOCK_USER } from '@/lib/data'
 import { CATEGORY_LABELS, STATUS_LABELS } from '@/types'
 import NavBar from '@/components/NavBar'
 
-export default function ToolDetailPage({ params }: { params: { id: string } }) {
-  const tool = MOCK_TOOLS.find(t => t.id === params.id)
+export default async function ToolDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const tool = MOCK_TOOLS.find(t => t.id === id)
 
   if (!tool) {
     notFound()
