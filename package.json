@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.3",
-    "next": "15.2.3",    // 或最新稳定版
+    "next": "15.2.3",    
     "react": "19.0.0",
     "react-dom": "19.0.0"
   },
