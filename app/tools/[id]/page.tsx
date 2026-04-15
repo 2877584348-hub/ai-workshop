@@ -1,76 +1,93 @@
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { useParams } from 'next/navigation'
+import { Tool } from '@/types'
 import { CATEGORY_LABELS, STATUS_LABELS } from '@/types'
 import NavBar from '@/components/NavBar'
 
-// 创建服务端 Supabase 客户端
-function createSupabaseServerClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  // 构建时（prerender）环境变量可能不存在，返回 mock 对象
-  if (!url || !key) {
-    console.warn('Supabase credentials not found during build, returning mock client')
-    return {
-      from: () => ({
-        select: () => ({
-          eq: () => ({
-            eq: () => ({
-              single: () => Promise.resolve({ data: null, error: new Error('Not configured') }),
-            }),
-            order: () => Promise.resolve({ data: [], error: null }),
-          }),
-          order: () => Promise.resolve({ data: [], error: null }),
-        }),
-      }),
-      rpc: () => Promise.resolve({ data: null, error: null }),
-    } as any
-  }
-
-  const cookieStore = cookies()
-  
-  return createServerClient(url, key, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll()
-      },
-      setAll(cookiesToSet) {
-        try {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        } catch {
-          // 在 Server Component 中无法设置 cookie 时忽略错误
-        }
-      },
-    },
-  })
+// 动态导入 supabase 客户端，避免构建时初始化
+async function getSupabaseClient() {
+  const { createSupabaseClient } = await import('@/lib/supabase/client')
+  return createSupabaseClient()
 }
 
-// 工具详情页（Server Component）
-export default async function ToolDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const supabase = createSupabaseServerClient()
+// 工具详情页（Client Component）
+export default function ToolDetailPage() {
+  const params = useParams()
+  const id = params.id as string
+  
+  const [tool, setTool] = useState<Tool | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // 从数据库获取工具
-  const { data: tool, error } = await supabase
-    .from('tools')
-    .select('*')
-    .eq('id', id)
-    .eq('is_public', true) // 只获取公开工具
-    .single()
+  useEffect(() => {
+    const fetchTool = async () => {
+      try {
+        const supabase = await getSupabaseClient()
+        
+        const { data, error: fetchError } = await supabase
+          .from('tools')
+          .select('*')
+          .eq('id', id)
+          .eq('is_public', true)
+          .single()
 
-  if (error || !tool) {
-    notFound()
+        if (fetchError || !data) {
+          setError('工具未找到')
+          return
+        }
+
+        setTool(data as Tool)
+
+        // 增加浏览量（异步，不阻塞）
+        try {
+          await supabase.rpc('increment_view', { tool_id: id })
+        } catch {
+          // RPC 函数可能尚未创建，忽略错误
+        }
+      } catch (err) {
+        setError('加载失败')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (id) {
+      fetchTool()
+    }
+  }, [id])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-bg">
+        <NavBar />
+        <main className="pt-24 pb-16 container-custom">
+          <div className="text-center py-20">
+            <div className="text-text-muted">加载中...</div>
+          </div>
+        </main>
+      </div>
+    )
   }
 
-  // 增加浏览量（异步，不阻塞页面）
-  try {
-    await supabase.rpc('increment_view', { tool_id: id })
-  } catch {
-    // RPC 函数可能尚未创建，忽略错误
+  if (error || !tool) {
+    return (
+      <div className="min-h-screen bg-bg">
+        <NavBar />
+        <main className="pt-24 pb-16 container-custom">
+          <div className="text-center py-20">
+            <div className="text-6xl mb-4">🔍</div>
+            <h1 className="text-2xl font-bold text-text mb-2">工具未找到</h1>
+            <p className="text-text-muted mb-6">该工具不存在或未公开</p>
+            <Link href="/tools" className="btn-primary inline-block">
+              返回工具列表
+            </Link>
+          </div>
+        </main>
+      </div>
+    )
   }
 
   return (
