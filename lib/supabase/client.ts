@@ -38,5 +38,5 @@ export function createSupabaseClient() {
   return createBrowserClient(url, key)
 }
 
-// 默认导出，方便直接 import
-export const supabase = createSupabaseClient()
+// ⚠️ 不要在模块级别创建客户端实例，避免构建时初始化
+// 使用 createSupabaseClient() 函数在组件内创建
