@@ -10,10 +10,32 @@ import { createBrowserClient } from '@supabase/ssr'
  */
 
 export function createSupabaseClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  // 构建时（prerender）环境变量可能不存在，返回 mock 对象避免报错
+  if (!url || !key) {
+    console.warn('Supabase credentials not found, returning mock client')
+    return {
+      auth: {
+        getSession: () => Promise.resolve({ data: { session: null }, error: null }),
+        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+        signInWithPassword: () => Promise.resolve({ data: null, error: new Error('Not configured') }),
+        signInWithOAuth: () => Promise.resolve({ data: null, error: new Error('Not configured') }),
+        signUp: () => Promise.resolve({ data: null, error: new Error('Not configured') }),
+        signOut: () => Promise.resolve({ error: null }),
+      },
+      from: () => ({
+        select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: null, error: null }) }) }),
+        insert: () => Promise.resolve({ data: null, error: new Error('Not configured') }),
+        update: () => Promise.resolve({ data: null, error: new Error('Not configured') }),
+        delete: () => Promise.resolve({ data: null, error: new Error('Not configured') }),
+      }),
+      rpc: () => Promise.resolve({ data: null, error: null }),
+    } as any
+  }
+
+  return createBrowserClient(url, key)
 }
 
 // 默认导出，方便直接 import
