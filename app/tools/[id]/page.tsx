@@ -7,28 +7,46 @@ import NavBar from '@/components/NavBar'
 
 // 创建服务端 Supabase 客户端
 function createSupabaseServerClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  // 构建时（prerender）环境变量可能不存在，返回 mock 对象
+  if (!url || !key) {
+    console.warn('Supabase credentials not found during build, returning mock client')
+    return {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            eq: () => ({
+              single: () => Promise.resolve({ data: null, error: new Error('Not configured') }),
+            }),
+            order: () => Promise.resolve({ data: [], error: null }),
+          }),
+          order: () => Promise.resolve({ data: [], error: null }),
+        }),
+      }),
+      rpc: () => Promise.resolve({ data: null, error: null }),
+    } as any
+  }
+
   const cookieStore = cookies()
   
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          } catch {
-            // 在 Server Component 中无法设置 cookie 时忽略错误
-          }
-        },
+  return createServerClient(url, key, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll()
       },
-    }
-  )
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          )
+        } catch {
+          // 在 Server Component 中无法设置 cookie 时忽略错误
+        }
+      },
+    },
+  })
 }
 
 // 工具详情页（Server Component）
