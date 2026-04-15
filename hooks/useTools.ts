@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createSupabaseClient } from '@/lib/supabase/client'
 import { Tool } from '@/types'
 import { useUser } from './useUser'
@@ -29,7 +29,7 @@ interface ToolInput {
 export function useTools(options: UseToolsOptions = {}) {
   const { publicOnly = false, refetchOnFocus = true } = options
   const { user, isAuthenticated, userId } = useUser()
-  const supabase = createSupabaseClient()
+  const supabase = useMemo(() => createSupabaseClient(), [])
   
   const [tools, setTools] = useState<Tool[]>([])
   const [loading, setLoading] = useState(true)

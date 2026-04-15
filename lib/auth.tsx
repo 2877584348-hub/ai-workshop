@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, ReactNode, useMemo } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { createSupabaseClient } from '@/lib/supabase/client'
 
@@ -21,7 +21,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   
-  const supabase = createSupabaseClient()
+  // 使用 useMemo 延迟创建，避免构建时初始化
+  const supabase = useMemo(() => createSupabaseClient(), [])
 
   useEffect(() => {
     // 1. 首次挂载时主动获取 session
@@ -47,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signUp = async (email: string, password: string, name?: string) => {
-    const { error, data } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -57,8 +58,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     })
     
-    // 如果需要邮箱验证，error 会是 AuthRetryableCardError
-    // 如果直接登录成功，data.session 会存在
     return { error: error as Error | null }
   }
 
