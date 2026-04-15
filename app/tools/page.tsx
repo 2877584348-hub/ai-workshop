@@ -4,10 +4,15 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Tool, ToolCategory } from '@/types'
 import { CATEGORY_LABELS, CATEGORY_ICONS } from '@/types'
-import { createSupabaseClient } from '@/lib/supabase/client'
 import NavBar from '@/components/NavBar'
 import ToolCard from '@/components/ToolCard'
 import Footer from '@/components/Footer'
+
+// 动态导入 supabase 客户端，避免构建时初始化
+async function getSupabaseClient() {
+  const { createSupabaseClient } = await import('@/lib/supabase/client')
+  return createSupabaseClient()
+}
 
 export default function ToolsPage() {
   const [tools, setTools] = useState<Tool[]>([])
@@ -16,7 +21,7 @@ export default function ToolsPage() {
 
   useEffect(() => {
     const fetchTools = async () => {
-      const supabase = createSupabaseClient()
+      const supabase = await getSupabaseClient()
       const { data, error } = await supabase
         .from('tools')
         .select('*')

@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createSupabaseClient } from '@/lib/supabase/client'
+
+// 动态导入 supabase 客户端，避免构建时初始化
+async function getSupabaseClient() {
+  const { createSupabaseClient } = await import('@/lib/supabase/client')
+  return createSupabaseClient()
+}
 
 export default function AuthCallback() {
   const router = useRouter()
@@ -11,7 +16,7 @@ export default function AuthCallback() {
 
   useEffect(() => {
     const handleAuthCallback = async () => {
-      const supabase = createSupabaseClient()
+      const supabase = await getSupabaseClient()
 
       try {
         const { error } = await supabase.auth.getSession()

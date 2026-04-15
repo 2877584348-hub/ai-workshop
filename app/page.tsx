@@ -4,13 +4,18 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Tool } from '@/types'
 import { CATEGORY_LABELS, CATEGORY_ICONS, STATUS_LABELS } from '@/types'
-import { createSupabaseClient } from '@/lib/supabase/client'
 import NavBar from '@/components/NavBar'
 import HeroSection from '@/components/HeroSection'
 import ToolCard from '@/components/ToolCard'
 import Footer from '@/components/Footer'
 import CategoryFilter from '@/components/CategoryFilter'
 import StatsBar from '@/components/StatsBar'
+
+// 动态导入 supabase 客户端，避免构建时初始化
+async function getSupabaseClient() {
+  const { createSupabaseClient } = await import('@/lib/supabase/client')
+  return createSupabaseClient()
+}
 
 export default function Home() {
   const [tools, setTools] = useState<Tool[]>([])
@@ -19,7 +24,7 @@ export default function Home() {
   useEffect(() => {
     // 首页只获取公开的工具
     const fetchPublicTools = async () => {
-      const supabase = createSupabaseClient()
+      const supabase = await getSupabaseClient()
       const { data, error } = await supabase
         .from('tools')
         .select('*')

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { createSupabaseClient } from '@/lib/supabase/client'
 import { Tool } from '@/types'
 import { useUser } from './useUser'
 
@@ -22,6 +21,12 @@ interface ToolInput {
   is_public: boolean
 }
 
+// 动态创建 supabase 客户端，避免构建时初始化
+async function getSupabaseClient() {
+  const { createSupabaseClient } = await import('@/lib/supabase/client')
+  return createSupabaseClient()
+}
+
 /**
  * 用户工具 CRUD hook
  * 处理所有与 tools 表的交互
@@ -29,7 +34,6 @@ interface ToolInput {
 export function useTools(options: UseToolsOptions = {}) {
   const { publicOnly = false, refetchOnFocus = true } = options
   const { user, isAuthenticated, userId } = useUser()
-  const supabase = useMemo(() => createSupabaseClient(), [])
   
   const [tools, setTools] = useState<Tool[]>([])
   const [loading, setLoading] = useState(true)
@@ -40,6 +44,8 @@ export function useTools(options: UseToolsOptions = {}) {
     try {
       setLoading(true)
       setError(null)
+
+      const supabase = await getSupabaseClient()
 
       let query = supabase
         .from('tools')
@@ -84,7 +90,7 @@ export function useTools(options: UseToolsOptions = {}) {
     } finally {
       setLoading(false)
     }
-  }, [supabase, publicOnly, userId])
+  }, [publicOnly, userId])
 
   // 首次加载 + 窗口重新获得焦点时刷新
   useEffect(() => {
@@ -111,6 +117,7 @@ export function useTools(options: UseToolsOptions = {}) {
     }
 
     try {
+      const supabase = await getSupabaseClient()
       const { error: insertError } = await supabase.from('tools').insert({
         name: input.name,
         description: input.description,
@@ -143,6 +150,7 @@ export function useTools(options: UseToolsOptions = {}) {
     }
 
     try {
+      const supabase = await getSupabaseClient()
       const { error: updateError } = await supabase
         .from('tools')
         .update({
@@ -175,6 +183,7 @@ export function useTools(options: UseToolsOptions = {}) {
     }
 
     try {
+      const supabase = await getSupabaseClient()
       const { error: deleteError } = await supabase
         .from('tools')
         .delete()

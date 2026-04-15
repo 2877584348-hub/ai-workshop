@@ -1,8 +1,7 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, ReactNode, useMemo } from 'react'
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react'
 import { User, Session } from '@supabase/supabase-js'
-import { createSupabaseClient } from '@/lib/supabase/client'
 
 interface AuthContextType {
   user: User | null
@@ -16,38 +15,53 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// 动态创建 supabase 客户端，避免构建时初始化
+async function getSupabaseClient() {
+  const { createSupabaseClient } = await import('@/lib/supabase/client')
+  return createSupabaseClient()
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
-  
-  // 使用 useMemo 延迟创建，避免构建时初始化
-  const supabase = useMemo(() => createSupabaseClient(), [])
 
   useEffect(() => {
-    // 1. 首次挂载时主动获取 session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    let subscription: { unsubscribe: () => void } | null = null
+
+    const initAuth = async () => {
+      const supabase = await getSupabaseClient()
+
+      // 1. 首次挂载时主动获取 session
+      const { data: { session } } = await supabase.auth.getSession()
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
-    })
 
-    // 2. 监听认证状态变化
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
+      // 2. 监听认证状态变化
+      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setSession(session)
+        setUser(session?.user ?? null)
+        setLoading(false)
+      })
+      subscription = sub
+    }
 
-    return () => subscription.unsubscribe()
-  }, [supabase])
+    initAuth()
 
-  const signIn = async (email: string, password: string) => {
+    return () => {
+      subscription?.unsubscribe()
+    }
+  }, [])
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    const supabase = await getSupabaseClient()
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     return { error: error as Error | null }
-  }
+  }, [])
 
-  const signUp = async (email: string, password: string, name?: string) => {
+  const signUp = useCallback(async (email: string, password: string, name?: string) => {
+    const supabase = await getSupabaseClient()
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -57,23 +71,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
       },
     })
-    
     return { error: error as Error | null }
-  }
+  }, [])
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = useCallback(async () => {
+    const supabase = await getSupabaseClient()
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : '/auth/callback',
       },
     })
     return { error: error as Error | null }
-  }
+  }, [])
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
+    const supabase = await getSupabaseClient()
     await supabase.auth.signOut()
-  }
+  }, [])
 
   return (
     <AuthContext.Provider
