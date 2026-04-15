@@ -1,92 +1,138 @@
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { MOCK_TOOLS } from '@/lib/data'
+import { Tool, ToolCategory } from '@/types'
 import { CATEGORY_LABELS, CATEGORY_ICONS } from '@/types'
+import { createSupabaseClient } from '@/lib/supabase/client'
 import NavBar from '@/components/NavBar'
-import { MOCK_USER } from '@/lib/data'
+import ToolCard from '@/components/ToolCard'
+import Footer from '@/components/Footer'
 
 export default function ToolsPage() {
-  const tools = MOCK_TOOLS.filter(t => t.is_public)
+  const [tools, setTools] = useState<Tool[]>([])
+  const [loading, setLoading] = useState(true)
+  const [activeCategory, setActiveCategory] = useState<ToolCategory | 'all'>('all')
+
+  useEffect(() => {
+    const fetchTools = async () => {
+      const supabase = createSupabaseClient()
+      const { data, error } = await supabase
+        .from('tools')
+        .select('*')
+        .eq('is_public', true)
+        .order('created_at', { ascending: false })
+
+      if (!error && data) {
+        const mappedTools: Tool[] = data.map((row) => ({
+          id: row.id,
+          name: row.name,
+          description: row.description,
+          category: row.category,
+          icon: row.icon,
+          url: row.url,
+          status: row.status,
+          stars: row.stars,
+          views: row.views,
+          thumbnail: row.thumbnail,
+          tags: row.tags || [],
+          is_public: row.is_public,
+          user_id: row.user_id,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+        }))
+        setTools(mappedTools)
+      }
+      setLoading(false)
+    }
+
+    fetchTools()
+  }, [])
+
+  const filteredTools = activeCategory === 'all'
+    ? tools
+    : tools.filter(tool => tool.category === activeCategory)
+
+  const categories = Object.keys(CATEGORY_LABELS) as ToolCategory[]
 
   return (
     <div className="min-h-screen bg-bg">
       <div className="fixed inset-0 grid-bg -z-10" />
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-glow-accent rounded-full blur-[120px] -z-10 opacity-30" />
 
-      <NavBar user={MOCK_USER} />
+      <NavBar />
 
       <main className="pt-24 pb-16 container-custom">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-display font-bold text-text mb-4">
-            所有工具
-          </h1>
-          <p className="text-text-muted text-lg max-w-2xl mx-auto">
-            探索我制作的各种 AI 工具，用技术解决实际问题
-          </p>
+        <div className="mb-8">
+          <h1 className="text-3xl font-display font-bold text-text mb-2">工具库</h1>
+          <p className="text-text-muted">发现并探索各种 AI 工具</p>
         </div>
 
-        {/* Category tabs */}
-        <div className="flex flex-wrap justify-center gap-3 mb-12">
-          <Link href="/tools" className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-accent text-white">
-            全部
-          </Link>
-          {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-            <Link
-              key={key}
-              href={`/tools?category=${key}`}
-              className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-surface border border-border text-text-muted hover:text-text hover:border-accent/30 transition-all"
+        {/* Category filter */}
+        <div className="flex flex-wrap gap-2 mb-8">
+          <button
+            onClick={() => setActiveCategory('all')}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+              activeCategory === 'all'
+                ? 'bg-accent text-white shadow-glow-sm'
+                : 'bg-surface text-text-muted hover:text-text border border-border hover:border-accent/30'
+            }`}
+          >
+            <span>全部</span>
+            <span className="text-xs opacity-60">({tools.length})</span>
+          </button>
+
+          {categories.map(category => (
+            <button
+              key={category}
+              onClick={() => setActiveCategory(category)}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                activeCategory === category
+                  ? 'bg-accent text-white shadow-glow-sm'
+                  : 'bg-surface text-text-muted hover:text-text border border-border hover:border-accent/30'
+              }`}
             >
-              <span>{CATEGORY_ICONS[key as keyof typeof CATEGORY_ICONS]}</span>
-              <span>{label}</span>
-            </Link>
+              <span>{CATEGORY_ICONS[category]}</span>
+              <span>{CATEGORY_LABELS[category]}</span>
+              <span className="text-xs opacity-60">
+                ({tools.filter(t => t.category === category).length})
+              </span>
+            </button>
           ))}
         </div>
+
+        {/* Results count */}
+        <p className="text-sm text-text-muted mb-6">
+          显示 {filteredTools.length} 个工具
+        </p>
+
+        {/* Loading */}
+        {loading && (
+          <div className="text-center py-20">
+            <div className="text-text-muted">加载中...</div>
+          </div>
+        )}
 
         {/* Tools grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {tools.map((tool) => (
-            <Link
-              key={tool.id}
-              href={`/tools/${tool.id}`}
-              className="group bg-card rounded-2xl border border-border overflow-hidden card-hover"
-            >
-              {/* Thumbnail */}
-              {tool.thumbnail && (
-                <div className="relative h-40 overflow-hidden">
-                  <img
-                    src={tool.thumbnail}
-                    alt={tool.name}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent" />
-                  <div className="absolute top-3 left-3">
-                    <div className="w-10 h-10 rounded-xl bg-surface/80 backdrop-blur-sm flex items-center justify-center text-xl shadow-lg">
-                      {tool.icon}
-                    </div>
-                  </div>
-                </div>
-              )}
+        {!loading && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredTools.map((tool, index) => (
+              <ToolCard key={tool.id} tool={tool} index={index} />
+            ))}
+          </div>
+        )}
 
-              {/* Content */}
-              <div className="p-5">
-                <h3 className="text-lg font-display font-semibold text-text mb-2 group-hover:text-accent-light transition-colors">
-                  {tool.name}
-                </h3>
-                <p className="text-text-muted text-sm line-clamp-2 mb-4">
-                  {tool.description}
-                </p>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 text-xs text-text-dim">
-                    <span>👁️ {tool.views}</span>
-                    <span>⭐ {tool.stars}</span>
-                  </div>
-                  <span className="text-accent text-sm">查看详情 →</span>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+        {/* Empty state */}
+        {!loading && filteredTools.length === 0 && (
+          <div className="text-center py-20">
+            <div className="text-6xl mb-4">🔍</div>
+            <h3 className="text-xl font-medium text-text mb-2">没有找到工具</h3>
+            <p className="text-text-muted">试试选择其他分类</p>
+          </div>
+        )}
       </main>
+
+      <Footer />
     </div>
   )
 }

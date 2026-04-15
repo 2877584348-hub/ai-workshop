@@ -1,6 +1,10 @@
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { MOCK_TOOLS, MOCK_USER } from '@/lib/data'
-import { CATEGORY_LABELS, CATEGORY_ICONS, STATUS_LABELS, STATUS_COLORS } from '@/types'
+import { Tool } from '@/types'
+import { CATEGORY_LABELS, CATEGORY_ICONS, STATUS_LABELS } from '@/types'
+import { createSupabaseClient } from '@/lib/supabase/client'
 import NavBar from '@/components/NavBar'
 import HeroSection from '@/components/HeroSection'
 import ToolCard from '@/components/ToolCard'
@@ -9,7 +13,48 @@ import CategoryFilter from '@/components/CategoryFilter'
 import StatsBar from '@/components/StatsBar'
 
 export default function Home() {
-  const publicTools = MOCK_TOOLS.filter(tool => tool.is_public)
+  const [tools, setTools] = useState<Tool[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    // 首页只获取公开的工具
+    const fetchPublicTools = async () => {
+      const supabase = createSupabaseClient()
+      const { data, error } = await supabase
+        .from('tools')
+        .select('*')
+        .eq('is_public', true)
+        .order('created_at', { ascending: false })
+
+      if (!error && data) {
+        const mappedTools: Tool[] = data.map((row) => ({
+          id: row.id,
+          name: row.name,
+          description: row.description,
+          category: row.category,
+          icon: row.icon,
+          url: row.url,
+          status: row.status,
+          stars: row.stars,
+          views: row.views,
+          thumbnail: row.thumbnail,
+          tags: row.tags || [],
+          is_public: row.is_public,
+          user_id: row.user_id,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+        }))
+        setTools(mappedTools)
+      }
+      setLoading(false)
+    }
+
+    fetchPublicTools()
+  }, [])
+
+  // 如果数据库没数据，回退到示例数据
+  const publicTools = tools.length > 0 ? tools : []
+  const showMockData = tools.length === 0 && loading === false
 
   return (
     <div className="min-h-screen bg-bg">
@@ -17,7 +62,7 @@ export default function Home() {
       <div className="fixed inset-0 grid-bg -z-10" />
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-glow-accent rounded-full blur-[120px] -z-10 opacity-40" />
 
-      <NavBar user={MOCK_USER} />
+      <NavBar />
 
       <main>
         <HeroSection />
@@ -40,15 +85,24 @@ export default function Home() {
 
           <CategoryFilter tools={publicTools} />
 
+          {/* Loading state */}
+          {loading && (
+            <div className="text-center py-20">
+              <div className="text-text-muted">加载中...</div>
+            </div>
+          )}
+
           {/* Tools */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-            {publicTools.map((tool, index) => (
-              <ToolCard key={tool.id} tool={tool} index={index} />
-            ))}
-          </div>
+          {!loading && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+              {publicTools.map((tool, index) => (
+                <ToolCard key={tool.id} tool={tool} index={index} />
+              ))}
+            </div>
+          )}
 
           {/* Empty state */}
-          {publicTools.length === 0 && (
+          {!loading && publicTools.length === 0 && (
             <div className="text-center py-20">
               <div className="text-6xl mb-4">🔧</div>
               <h3 className="text-xl font-medium text-text mb-2">还没有工具</h3>

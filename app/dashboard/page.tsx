@@ -1,17 +1,23 @@
 'use client'
 
-import { useState } from 'react'
-import Link from 'next/link'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { MOCK_TOOLS, MOCK_USER } from '@/lib/data'
+import Link from 'next/link'
+import { useUser } from '@/hooks/useUser'
+import { useTools } from '@/hooks/useTools'
 import { Tool, ToolCategory, CATEGORY_LABELS, CATEGORY_ICONS } from '@/types'
 import NavBar from '@/components/NavBar'
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [tools, setTools] = useState(MOCK_TOOLS)
+  const { isAuthenticated, isLoading: userLoading, userId } = useUser()
+  const { tools, loading, error, addTool, updateTool, deleteTool, totalCount, activeCount, buildingCount } = useTools()
+  
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingTool, setEditingTool] = useState<Tool | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -24,10 +30,20 @@ export default function DashboardPage() {
     is_public: true,
   })
 
-  const handleDelete = (id: string) => {
-    if (confirm('确定要删除这个工具吗？')) {
-      setTools(tools.filter(t => t.id !== id))
+  // 重定向未登录用户
+  useEffect(() => {
+    if (!userLoading && !isAuthenticated) {
+      router.push('/login')
     }
+  }, [userLoading, isAuthenticated, router])
+
+  const handleDelete = async (id: string) => {
+    setSubmitError('')
+    const result = await deleteTool(id)
+    if (!result.success) {
+      setSubmitError(result.error || '删除失败')
+    }
+    setDeleteConfirm(null)
   }
 
   const handleEdit = (tool: Tool) => {
@@ -44,54 +60,67 @@ export default function DashboardPage() {
     setShowAddModal(true)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setIsSubmitting(true)
+    setSubmitError('')
 
-    const newTool: Tool = {
-      id: editingTool?.id || Date.now().toString(),
+    const toolInput = {
       name: formData.name,
       description: formData.description,
       category: formData.category,
       icon: formData.icon,
       url: formData.url,
-      status: editingTool?.status || 'building',
-      stars: editingTool?.stars || 0,
-      views: editingTool?.views || 0,
-      created_at: editingTool?.created_at || new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      user_id: MOCK_USER.id,
-      is_public: formData.is_public,
       tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
+      is_public: formData.is_public,
     }
 
+    let result
     if (editingTool) {
-      setTools(tools.map(t => t.id === editingTool.id ? newTool : t))
+      result = await updateTool(editingTool.id, toolInput)
     } else {
-      setTools([...tools, newTool])
+      result = await addTool(toolInput)
     }
 
-    setShowAddModal(false)
-    setEditingTool(null)
-    setFormData({
-      name: '',
-      description: '',
-      category: 'text',
-      icon: '🔧',
-      url: '',
-      tags: '',
-      is_public: true,
-    })
+    setIsSubmitting(false)
+
+    if (result.success) {
+      setShowAddModal(false)
+      setEditingTool(null)
+      setFormData({
+        name: '',
+        description: '',
+        category: 'text',
+        icon: '🔧',
+        url: '',
+        tags: '',
+        is_public: true,
+      })
+    } else {
+      setSubmitError(result.error || '操作失败')
+    }
   }
 
-  const userTools = tools.filter(t => t.user_id === MOCK_USER.id)
-  const activeCount = userTools.filter(t => t.status === 'active').length
+  // 加载中
+  if (userLoading) {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center">
+        <div className="text-text-muted">加载中...</div>
+      </div>
+    )
+  }
+
+  // 未登录（会被重定向）
+  if (!isAuthenticated) {
+    return null
+  }
 
   return (
     <div className="min-h-screen bg-bg">
       <div className="fixed inset-0 grid-bg -z-10" />
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-glow-accent rounded-full blur-[120px] -z-10 opacity-30" />
 
-      <NavBar user={MOCK_USER} />
+      <NavBar />
 
       <main className="pt-24 pb-16 container-custom">
         {/* Header */}
@@ -128,12 +157,19 @@ export default function DashboardPage() {
           </button>
         </div>
 
+        {/* Error display */}
+        {error && (
+          <div className="mb-6 p-4 rounded-xl bg-danger/10 border border-danger/20 text-danger">
+            {error}
+          </div>
+        )}
+
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-8">
           {[
-            { label: '我的工具', value: userTools.length, icon: '🔧' },
+            { label: '我的工具', value: totalCount, icon: '🔧' },
             { label: '已上线', value: activeCount, icon: '✅' },
-            { label: '开发中', value: userTools.length - activeCount, icon: '🚧' },
+            { label: '开发中', value: buildingCount, icon: '🚧' },
           ].map((stat, i) => (
             <div key={i} className="bg-card border border-border rounded-xl p-4">
               <div className="flex items-center gap-3">
@@ -153,7 +189,11 @@ export default function DashboardPage() {
             <h2 className="font-medium text-text">我的工具</h2>
           </div>
 
-          {userTools.length === 0 ? (
+          {loading ? (
+            <div className="p-12 text-center">
+              <div className="text-text-muted">加载中...</div>
+            </div>
+          ) : tools.length === 0 ? (
             <div className="p-12 text-center">
               <div className="text-6xl mb-4">🛠️</div>
               <h3 className="text-xl font-medium text-text mb-2">还没有工具</h3>
@@ -161,7 +201,7 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {userTools.map((tool) => (
+              {tools.map((tool) => (
                 <div key={tool.id} className="p-6 hover:bg-surface/50 transition-colors">
                   <div className="flex items-start gap-4">
                     {/* Icon */}
@@ -183,7 +223,7 @@ export default function DashboardPage() {
                       </div>
                       <p className="text-sm text-text-muted line-clamp-1">{tool.description}</p>
                       <div className="flex items-center gap-4 mt-2 text-xs text-text-dim">
-                        <span>{CATEGORY_LABELS[tool.category]}</span>
+                        <span>{CATEGORY_LABELS[tool.category as ToolCategory]}</span>
                         <span>👁️ {tool.views}</span>
                         <span>⭐ {tool.stars}</span>
                         <span>{new Date(tool.updated_at).toLocaleDateString('zh-CN')}</span>
@@ -201,7 +241,7 @@ export default function DashboardPage() {
                         </svg>
                       </button>
                       <button
-                        onClick={() => handleDelete(tool.id)}
+                        onClick={() => setDeleteConfirm(tool.id)}
                         className="p-2 rounded-lg bg-surface hover:bg-danger/10 border border-border transition-all text-text-muted hover:text-danger"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -216,6 +256,30 @@ export default function DashboardPage() {
           )}
         </div>
       </main>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-bg/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full">
+            <h3 className="text-xl font-display font-bold text-text mb-4">确认删除</h3>
+            <p className="text-text-muted mb-6">确定要删除这个工具吗？此操作不可恢复。</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 btn-secondary"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => handleDelete(deleteConfirm)}
+                className="flex-1 py-2 px-4 rounded-xl bg-danger text-white hover:bg-danger/80 transition-colors"
+              >
+                删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add/Edit Modal */}
       {showAddModal && (
@@ -239,6 +303,12 @@ export default function DashboardPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {submitError && (
+                <div className="p-3 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm">
+                  {submitError}
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-text mb-2">工具名称</label>
                 <input
@@ -336,8 +406,8 @@ export default function DashboardPage() {
                 >
                   取消
                 </button>
-                <button type="submit" className="flex-1 btn-primary">
-                  {editingTool ? '保存更改' : '添加工具'}
+                <button type="submit" disabled={isSubmitting} className="flex-1 btn-primary disabled:opacity-50">
+                  {isSubmitting ? '保存中...' : (editingTool ? '保存更改' : '添加工具')}
                 </button>
               </div>
             </form>

@@ -2,15 +2,15 @@
 
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import { User } from '@/types'
+import { useUser } from '@/hooks/useUser'
+import { useAuth } from '@/lib/auth'
 
-interface NavBarProps {
-  user: User | null
-}
-
-export default function NavBar({ user }: NavBarProps) {
+export default function NavBar() {
+  const { user, isAuthenticated, userName, userAvatar } = useUser()
+  const { signOut } = useAuth()
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isSigningOut, setIsSigningOut] = useState(false)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -19,6 +19,13 @@ export default function NavBar({ user }: NavBarProps) {
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true)
+    await signOut()
+    // 刷新页面确保状态同步
+    window.location.href = '/'
+  }
 
   return (
     <nav
@@ -48,7 +55,7 @@ export default function NavBar({ user }: NavBarProps) {
             <Link href="/tools" className="text-text-muted hover:text-text transition-colors">
               工具
             </Link>
-            {user && (
+            {isAuthenticated && (
               <Link href="/dashboard" className="text-text-muted hover:text-text transition-colors">
                 管理
               </Link>
@@ -57,20 +64,27 @@ export default function NavBar({ user }: NavBarProps) {
 
           {/* User Actions */}
           <div className="flex items-center gap-4">
-            {user ? (
+            {isAuthenticated ? (
               <div className="flex items-center gap-3">
                 <Link href="/dashboard" className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-surface hover:bg-card border border-border transition-all">
                   <div className="w-8 h-8 rounded-full overflow-hidden">
-                    {user.avatar ? (
-                      <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                    {userAvatar ? (
+                      <img src={userAvatar} alt={userName} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full bg-accent/20 flex items-center justify-center text-accent-light text-sm">
-                        {user.name.charAt(0)}
+                        {userName.charAt(0)}
                       </div>
                     )}
                   </div>
-                  <span className="text-text font-medium">{user.name}</span>
+                  <span className="text-text font-medium">{userName}</span>
                 </Link>
+                <button
+                  onClick={handleSignOut}
+                  disabled={isSigningOut}
+                  className="text-text-muted hover:text-danger transition-colors text-sm disabled:opacity-50"
+                >
+                  {isSigningOut ? '退出中...' : '退出'}
+                </button>
               </div>
             ) : (
               <div className="flex items-center gap-3">
@@ -110,10 +124,18 @@ export default function NavBar({ user }: NavBarProps) {
             <Link href="/tools" className="px-4 py-2 text-text-muted hover:text-text hover:bg-card rounded-lg transition-all">
               工具
             </Link>
-            {user && (
+            {isAuthenticated && (
               <Link href="/dashboard" className="px-4 py-2 text-text-muted hover:text-text hover:bg-card rounded-lg transition-all">
                 管理
               </Link>
+            )}
+            {isAuthenticated && (
+              <button
+                onClick={handleSignOut}
+                className="px-4 py-2 text-left text-danger hover:bg-danger/10 rounded-lg transition-all"
+              >
+                退出登录
+              </button>
             )}
           </div>
         </div>

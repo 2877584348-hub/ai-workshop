@@ -1,15 +1,35 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { MOCK_TOOLS, MOCK_USER } from '@/lib/data'
+import { createSupabaseClient } from '@/lib/supabase/client'
 import { CATEGORY_LABELS, STATUS_LABELS } from '@/types'
 import NavBar from '@/components/NavBar'
 
+// 工具详情页（Server Component）
 export default async function ToolDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const tool = MOCK_TOOLS.find(t => t.id === id)
+  const supabase = createSupabaseClient()
 
-  if (!tool) {
+  // 从数据库获取工具
+  const { data: tool, error } = await supabase
+    .from('tools')
+    .select('*')
+    .eq('id', id)
+    .eq('is_public', true) // 只获取公开工具
+    .single()
+
+  if (error || !tool) {
     notFound()
+  }
+
+  // 增加浏览量（异步，不阻塞页面）
+  // 注意：需要在 Supabase 中创建 increment_view RPC 函数
+  // CREATE OR REPLACE FUNCTION increment_view(tool_id UUID) RETURNS void AS $$
+  //   UPDATE tools SET views = views + 1 WHERE id = tool_id;
+  // $$ LANGUAGE sql;
+  try {
+    await supabase.rpc('increment_view', { tool_id: id })
+  } catch {
+    // RPC 函数可能尚未创建，忽略错误
   }
 
   return (
@@ -17,7 +37,7 @@ export default async function ToolDetailPage({ params }: { params: Promise<{ id:
       <div className="fixed inset-0 grid-bg -z-10" />
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-glow-accent rounded-full blur-[120px] -z-10 opacity-30" />
 
-      <NavBar user={MOCK_USER} />
+      <NavBar />
 
       <main className="pt-24 pb-16 container-custom">
         {/* Breadcrumb */}
@@ -58,10 +78,10 @@ export default async function ToolDetailPage({ params }: { params: Promise<{ id:
                           ? 'bg-success/20 text-success border border-success/30'
                           : 'bg-warning/20 text-warning border border-warning/30'
                       }`}>
-                        {STATUS_LABELS[tool.status]}
+                        {STATUS_LABELS[tool.status as keyof typeof STATUS_LABELS]}
                       </span>
                       <span className="text-sm text-text-muted">
-                        {CATEGORY_LABELS[tool.category]}
+                        {CATEGORY_LABELS[tool.category as keyof typeof CATEGORY_LABELS]}
                       </span>
                     </div>
                   </div>
@@ -74,16 +94,18 @@ export default async function ToolDetailPage({ params }: { params: Promise<{ id:
                 </div>
 
                 {/* Tags */}
-                <div className="flex flex-wrap gap-2 mt-6">
-                  {tool.tags.map((tag, i) => (
-                    <span
-                      key={i}
-                      className="px-3 py-1 rounded-full bg-surface border border-border text-sm text-text-muted"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
+                {tool.tags && tool.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-6">
+                    {tool.tags.map((tag: string, i: number) => (
+                      <span
+                        key={i}
+                        className="px-3 py-1 rounded-full bg-surface border border-border text-sm text-text-muted"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -125,11 +147,11 @@ export default async function ToolDetailPage({ params }: { params: Promise<{ id:
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-text-muted">浏览量</span>
-                  <span className="text-text font-medium">{tool.views}</span>
+                  <span className="text-text font-medium">{tool.views || 0}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-text-muted">收藏数</span>
-                  <span className="text-text font-medium">{tool.stars}</span>
+                  <span className="text-text font-medium">{tool.stars || 0}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-text-muted">创建时间</span>
