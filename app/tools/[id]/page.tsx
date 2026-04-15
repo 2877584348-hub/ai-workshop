@@ -1,13 +1,40 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { createSupabaseClient } from '@/lib/supabase/client'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 import { CATEGORY_LABELS, STATUS_LABELS } from '@/types'
 import NavBar from '@/components/NavBar'
+
+// 创建服务端 Supabase 客户端
+function createSupabaseServerClient() {
+  const cookieStore = cookies()
+  
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            )
+          } catch {
+            // 在 Server Component 中无法设置 cookie 时忽略错误
+          }
+        },
+      },
+    }
+  )
+}
 
 // 工具详情页（Server Component）
 export default async function ToolDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = createSupabaseClient()
+  const supabase = createSupabaseServerClient()
 
   // 从数据库获取工具
   const { data: tool, error } = await supabase
@@ -22,10 +49,6 @@ export default async function ToolDetailPage({ params }: { params: Promise<{ id:
   }
 
   // 增加浏览量（异步，不阻塞页面）
-  // 注意：需要在 Supabase 中创建 increment_view RPC 函数
-  // CREATE OR REPLACE FUNCTION increment_view(tool_id UUID) RETURNS void AS $$
-  //   UPDATE tools SET views = views + 1 WHERE id = tool_id;
-  // $$ LANGUAGE sql;
   try {
     await supabase.rpc('increment_view', { tool_id: id })
   } catch {
