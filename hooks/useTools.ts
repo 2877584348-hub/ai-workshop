@@ -65,7 +65,7 @@ export function useTools(options: UseToolsOptions = {}) {
       if (fetchError) throw fetchError
 
       // 映射数据库字段到前端类型
-      const mappedTools: Tool[] = (data || []).map((row) => ({
+      const mappedTools: Tool[] = (data || []).map((row: any) => ({
         id: row.id,
         name: row.name,
         description: row.description,
