@@ -29,7 +29,7 @@ export default function ToolsPage() {
         .order('created_at', { ascending: false })
 
       if (!error && data) {
-        const mappedTools: Tool[] = data.map((row) => ({
+        const mappedTools: Tool[] = data.map((row: any) => ({
           id: row.id,
           name: row.name,
           description: row.description,
