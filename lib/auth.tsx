@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
 
       // 2. 监听认证状态变化
-      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
         setSession(session)
         setUser(session?.user ?? null)
         setLoading(false)

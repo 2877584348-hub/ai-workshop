@@ -35,7 +35,30 @@ export function createSupabaseClient() {
     } as any
   }
 
-  return createBrowserClient(url, key)
+  // 只有当环境变量存在时才创建真实的客户端
+  try {
+    return createBrowserClient(url, key)
+  } catch (error) {
+    console.warn('Failed to create Supabase client, returning mock', error)
+    // 如果创建失败，返回 mock
+    return {
+      auth: {
+        getSession: () => Promise.resolve({ data: { session: null }, error: null }),
+        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+        signInWithPassword: () => Promise.resolve({ data: null, error: new Error('Failed to create client') }),
+        signInWithOAuth: () => Promise.resolve({ data: null, error: new Error('Failed to create client') }),
+        signUp: () => Promise.resolve({ data: null, error: new Error('Failed to create client') }),
+        signOut: () => Promise.resolve({ error: null }),
+      },
+      from: () => ({
+        select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: null, error: null }) }) }),
+        insert: () => Promise.resolve({ data: null, error: new Error('Failed to create client') }),
+        update: () => Promise.resolve({ data: null, error: new Error('Failed to create client') }),
+        delete: () => Promise.resolve({ data: null, error: new Error('Failed to create client') }),
+      }),
+      rpc: () => Promise.resolve({ data: null, error: null }),
+    } as any
+  }
 }
 
 // ⚠️ 不要在模块级别创建客户端实例，避免构建时初始化
