@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@opennextjs/cloudflare": "^1.19.7",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.39.3",
     "next": "15.5.16",
